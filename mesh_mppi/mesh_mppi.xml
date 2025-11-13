@@ -1,0 +1,14 @@
+<library path="mesh_mppi">
+    <class name="mesh_mppi/DiffDriveMPC" type="mesh_mppi::MeshMPPI<DifferentialDrive>"
+           base_class_type="mbf_mesh_core::MeshController">
+        <description>
+            A model predictive controller for mesh_navigation using a DifferentialDrive Kinematic Model.
+        </description>
+    </class>
+    <class name="mesh_mppi/BicycleMPC" type="mesh_mppi::MeshMPPI<Bicycle>"
+           base_class_type="mbf_mesh_core::MeshController">
+        <description>
+            A model predictive controller for mesh_navigation using a Bicycle Kinematic Model.
+        </description>
+    </class>
+</library>

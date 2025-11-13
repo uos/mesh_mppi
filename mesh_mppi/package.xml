@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mesh_mppi</name>
+  <version>1.0.0</version>
+  <description>A Model Predictive Path Integral control algorithm designed for triangular mesh maps.</description>
+  <maintainer email="jubraun@uos.de">Justus Braun</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>mesh_mppi_msgs</depend>
+  <depend>mesh_map</depend>
+  <depend>mbf_mesh_core</depend>
+  <depend>mbf_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
