@@ -33,7 +33,7 @@ sudo apt install libembree-dev
 ```
 Now clone this repository into the workspace's source directory:
 ```bash
-git clone ADD_HTTPS_URL_HERE
+git clone https://github.com/uos/mesh_mppi.git
 ```
 Finally, go back to the workspace directory and build it:
 ```bash
