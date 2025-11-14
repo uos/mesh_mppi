@@ -1,5 +1,9 @@
 # Introduction
 
+<div align="center" min-width=519px>
+  <img src="doc/mesh_mppi_floor_is_lava.gif" alt="MeshMPPI"/>
+</div>
+
 **MeshMPPI** is an adaptation of the *model predictive path integral* (MPPI) control algorithm to surface meshes.
 The MPPI algorithm generates control signals by simulating the trajectories resulting from a set of random samples.
 This adaptation constraints the trajectory prediction to the surface defined by a triangular surface mesh.
