@@ -33,7 +33,7 @@ rosdep install --from-paths . --ignore-src -r -y
 We additionally recommend to install the [`embree4`](https://github.com/RenderKit/embree) library since MeshNav makes use of their optimized ray tracing kernels if they are available.
 For Ubuntu 24 LTS you may install embree with the following command:
 ```bash
-sudo apt install libembree-dev
+sudo apt install libembree-dev -y
 ```
 Now clone this repository into the workspace's source directory:
 ```bash
@@ -53,12 +53,12 @@ The default gcc version shipped with Ubuntu 22 is gcc-11, which supports some C+
 To get around this limitation you have to install a newer gcc version.
 For this you need to add the `ubuntu-toolchain-r/test` repository.
 ```bash
-sudo apt install software-properties-common
+sudo apt install software-properties-common -y
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 ```
 And then install a gcc version greater or equal to 13 and configure your system to use the new compiler.
 ```bash
-sudo apt install gcc-13 g++-13
+sudo apt install gcc-13 g++-13 -y
 # Set gcc 13 as the system default
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 13 --slave /usr/bin/g++ g++ /usr/bin/g++-13
 ```
