@@ -9,7 +9,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Use the download extract timestamp with fetch content
-cmake_policy(SET CMP0135 NEW)
+# Ubuntu 22 has a CMake version, which does not know this policy yet
+if (CMAKE_VESRION VERSION_GREATER_EQUAL "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
 
 # Options
 option(BUILD_TESTING "Build tests" OFF)

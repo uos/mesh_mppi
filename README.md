@@ -45,6 +45,25 @@ cd ..
 colcon build --cmake-args " -DCMAKE_BUILD_TYPE=Release"
 ```
 
+<details>
+<summary>Compilation on Ubuntu 22 and ROS2 Humble</summary>
+
+This package requires the C++23 standard!
+The default gcc version shipped with Ubuntu 22 is gcc-11, which supports some C++23 features but not all, notably `<format>` and `<expected>` are not available.
+To get around this limitation you have to install a newer gcc version.
+For this you need to add the `ubuntu-toolchain-r/test` repository.
+```bash
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+```
+And then install a gcc version greater or equal to 13 and configure your system to use the new compiler.
+```bash
+sudo apt install gcc-13 g++-13
+# Set gcc 13 as the system default
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 13 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+```
+</details>
+
 # Usage
 
 The `mesh_mppi` package provides implementations of the *Differential Drive* and *Bicycle* kinematic models.
