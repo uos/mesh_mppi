@@ -5,14 +5,26 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "CMake build type" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Use the download extract timestamp with fetch content
-cmake_policy(SET CMP0135 NEW)
-
 # Options
 option(BUILD_TESTING "Build tests" OFF)
+
+# Use the download extract timestamp with fetch content
+# Ubuntu 22 has a CMake version, which does not know this policy yet
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
+# gcc-11 claims it supports C++23 but it doesn't
+if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13.0.0")
+  message(FATAL_ERROR "gcc versions below 13 do not support C++23 properly! See the README for information on how to install a newer compiler version.")
+endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
