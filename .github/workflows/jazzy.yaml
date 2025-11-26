@@ -1,0 +1,55 @@
+name: 'Build for ROS2 Jazzy'
+
+on: 
+  workflow_dispatch:
+    branches: '*'
+  pull_request:
+    branches: 'main'
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    container:
+      image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    steps:
+      - name: Download LVR2
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: 'uos/lvr2'
+          latest: true
+          fileName: '*.deb'
+
+      - name: Install LVR2
+        run: 'sudo apt update -y && sudo apt install -y ./lvr2-*.deb'
+
+      - name: Checkout MoveBaseFlex
+        uses: actions/checkout@v6
+        with:
+          repository: 'naturerobots/move_base_flex'
+          submodules: 'recursive'
+          path: 'move_base_flex'
+
+      - name: Checkout MeshTools
+        uses: actions/checkout@v6
+        with:
+          repository: 'naturerobots/mesh_tools'
+          submodules: 'recursive'
+          path: 'mesh_tools'
+
+      - name: Checkout MeshNav
+        uses: actions/checkout@v6
+        with:
+          repository: 'naturerobots/mesh_navigation'
+          submodules: 'recursive'
+          path: 'mesh_navigation'
+
+      - name: Export source deps for ROS CI
+        run: 'vcs export | tee /tmp/deps.repos'
+
+      - name: Build
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: mesh_mppi
+          vcs-repo-file-url: /tmp/deps.repos
+          target-ros2-distro: jazzy
+          skip-tests: true
