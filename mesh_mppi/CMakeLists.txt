@@ -17,11 +17,11 @@ option(BUILD_TESTING "Build tests" OFF)
 
 # Use the download extract timestamp with fetch content
 # Ubuntu 22 has a CMake version, which does not know this policy yet
-if (CMAKE_VESRION VERSION_GREATER_EQUAL "3.24.0")
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
   cmake_policy(SET CMP0135 NEW)
 endif()
 
-# gcc-11 claimes it supports C++23 but it doesn't
+# gcc-11 claims it supports C++23 but it doesn't
 if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13.0.0")
   message(FATAL_ERROR "gcc versions below 13 do not support C++23 properly! See the README for information on how to install a newer compiler version.")
 endif()
