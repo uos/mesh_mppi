@@ -1,3 +1,4 @@
+#include "mesh_mppi/types/State.hpp"
 #include <mbf_mesh_core/mesh_controller.h>
 #include <nav_msgs/msg/path.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
@@ -102,18 +103,13 @@ protected:
 
     lvr2::OptionalFaceHandle getCurrentFace() const;
 
+    [[nodiscard]] bool isMakingProgress(const Trajectory& traj);
+
 
     void publishOptimalTrajectory(const Trajectory& traj);
 
     void publishOptimalControlSequence(const Eigen::ArrayXf& data, uint32_t timesteps, uint32_t signals, const rclcpp::Time& timestamp);
 
-private:
-
-    [[nodiscard]] bool initializeParameters();
-
-    rcl_interfaces::msg::SetParametersResult reconfigure(const std::vector<rclcpp::Parameter>& parameters);
-
-protected:
     // Configuration of the controller plugin
     std::string name_;
     std::shared_ptr<tf2_ros::Buffer> tf_;
@@ -131,7 +127,15 @@ protected:
     // The cost function
     std::shared_ptr<CostFunction> cost_function_;
 
+    // Wether this is the first call after a new plan was set
+    bool first_;
+
 private:
+
+    [[nodiscard]] bool initializeParameters();
+
+    rcl_interfaces::msg::SetParametersResult reconfigure(const std::vector<rclcpp::Parameter>& parameters);
+
     // The last known pose
     struct {
         bool valid;
@@ -141,8 +145,10 @@ private:
         lvr2::OptionalFaceHandle faceH;
     } pose_;
 
-    bool reached_goal_;
+    // Data for progress checking
+    std::deque<mesh_map::Vector> past_trajectory_;
 
+    bool reached_goal_;
 
     // The current plan
     std::vector<geometry_msgs::msg::PoseStamped> plan_;
@@ -150,10 +156,6 @@ private:
     // A publisher for the best trajectory
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr traj_pub_;
     rclcpp::Publisher<ControlSequenceStamped>::SharedPtr sequence_pub_;
-
-protected:
-    // Wether this is the first call after a new plan was set
-    bool first_;
 };
 
 } // namespace mesh_mppi

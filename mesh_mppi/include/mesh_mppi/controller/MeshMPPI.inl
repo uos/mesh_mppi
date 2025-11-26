@@ -147,6 +147,12 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
     cmd_vel.twist = kinematics_->getTwistFromControls(current, control);
     cmd_vel.header.stamp = node_->get_clock()->now();
 
+    if (!isMakingProgress(trajectory))
+    {
+        message = "The robot failed to make progress towards the goal!";
+        return ExePathResult::ROBOT_STUCK;
+    }
+
     this->publishOptimalTrajectory(trajectory);
     this->publishOptimalControlSequence(sequence, params_.horizon, optimizer_.numControlSignals(), cmd_vel.header.stamp);
 

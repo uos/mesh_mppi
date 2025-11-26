@@ -211,6 +211,7 @@ bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& p
     plan_ = plan;
     reached_goal_ = false;
     pose_.valid = false;
+    past_trajectory_.clear();
     cost_function_->set_plan(plan);
     return true;
 }
@@ -291,6 +292,33 @@ bool MeshMPPIBase::initialize(
     }
 
     return this->initialize();
+}
+
+
+bool MeshMPPIBase::isMakingProgress(const Trajectory& traj)
+{
+    past_trajectory_.push_back(traj.front().pose.position);
+    while (past_trajectory_.size() > 100)
+    {
+        past_trajectory_.pop_front();
+    }
+
+    // We give the robot time to start moving
+    if (past_trajectory_.size() < 100)
+    {
+        return true;
+    }
+
+    float traveled_distance = 0.0f;
+    for (size_t i = 0, ii = 1; ii < past_trajectory_.size(); i++, ii++)
+    {
+        traveled_distance += past_trajectory_[i].distance(past_trajectory_[ii]);
+    }
+
+    // TODO: Should we also have a rotational term to allow for in place rotation?
+    // TODO: Check if we are close to the goal
+
+    return traveled_distance > 0.25f;
 }
 
 } // namespace mesh_mppi
