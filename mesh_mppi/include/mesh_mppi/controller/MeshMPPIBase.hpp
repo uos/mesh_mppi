@@ -136,6 +136,9 @@ private:
 
     rcl_interfaces::msg::SetParametersResult reconfigure(const std::vector<rclcpp::Parameter>& parameters);
 
+    // Reconfigure callback handle
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr reconfigure_callback_handle_;
+
     // The last known pose
     struct {
         bool valid;
@@ -147,6 +150,8 @@ private:
 
     // Data for progress checking
     std::deque<mesh_map::Vector> past_trajectory_;
+    double progress_translation_threshold_;
+    double progress_num_timesteps_;
 
     bool reached_goal_;
 

@@ -143,6 +143,29 @@ bool MeshMPPIBase::initializeParameters()
         node_->declare_parameter<double>("controller_frequency", 20.0);
     }
     params_.controller_frequency = node_->get_parameter("controller_frequency").as_double();
+
+    { // Translation threshold for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.translation_threshold";
+    desc.description = "The minimum distance the robot has to travel in the specified time frame to not be considered stuck.";
+    progress_translation_threshold_ = node_->declare_parameter<double>(desc.name, 0.25, desc);
+    }
+    { // Translation timeframe for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.timeframe";
+    desc.description = "The timeframe in seconds to use for the controllers's progress check.";
+    const double time = node_->declare_parameter<double>(desc.name, 5.0, desc);
+    if (0.0 >= time)
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Invalid parameter value: '%s' cannot be less or equal to 0.0!", desc.name.c_str());
+        return false;
+    }
+    progress_num_timesteps_ = time * params_.controller_frequency;
+    }
+
+    reconfigure_callback_handle_ = node_->add_on_set_parameters_callback(
+        std::bind(&MeshMPPIBase::reconfigure, this, std::placeholders::_1)
+    );
     
     return true;
 }
@@ -160,6 +183,24 @@ rcl_interfaces::msg::SetParametersResult MeshMPPIBase::reconfigure(const std::ve
         {
             params_.controller_frequency = param.as_double();
             getKinematicsBase().setDeltaTime(1.0 / param.as_double());
+        }
+        else if (name_ + ".progress_check.translation_threshold" == param.get_name())
+        {
+            progress_translation_threshold_ = param.as_double();
+        }
+        else if (name_ + ".progress_check.timeframe" == param.get_name())
+        {
+            if (0.0 >= param.as_double())
+            {
+                RCLCPP_ERROR(
+                    node_->get_logger(),
+                    "Invalid parameter value: '%s.progress_check.timeframe' cannot be less or equal to 0.0!",
+                    name_.c_str()
+                );
+                result.reason = "Invalid parameter value: 'progress_check.timeframe' cannot be less or equal to 0.0!";
+                result.successful = false;
+            }
+            progress_num_timesteps_ = params_.controller_frequency * param.as_double();
         }
     }
 
@@ -298,13 +339,13 @@ bool MeshMPPIBase::initialize(
 bool MeshMPPIBase::isMakingProgress(const Trajectory& traj)
 {
     past_trajectory_.push_back(traj.front().pose.position);
-    while (past_trajectory_.size() > 100)
+    while (past_trajectory_.size() > progress_num_timesteps_)
     {
         past_trajectory_.pop_front();
     }
 
     // We give the robot time to start moving
-    if (past_trajectory_.size() < 100)
+    if (past_trajectory_.size() < progress_num_timesteps_)
     {
         return true;
     }
@@ -318,7 +359,7 @@ bool MeshMPPIBase::isMakingProgress(const Trajectory& traj)
     // TODO: Should we also have a rotational term to allow for in place rotation?
     // TODO: Check if we are close to the goal
 
-    return traveled_distance > 0.25f;
+    return traveled_distance > progress_translation_threshold_;
 }
 
 } // namespace mesh_mppi
