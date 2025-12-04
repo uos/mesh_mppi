@@ -1,7 +1,7 @@
-#include "mesh_mppi/types/State.hpp"
 #include <mbf_mesh_core/mesh_controller.h>
 #include <nav_msgs/msg/path.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/logger.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <mesh_mppi/scoring/CostFunction.hpp>
 #include <mesh_mppi/kinematics/DifferentialDrive.hpp>
@@ -19,10 +19,12 @@ class MeshMPPIBase: public mbf_mesh_core::MeshController
 {
 public:
     typedef std::shared_ptr<MeshMPPIBase> Ptr;
+
+    enum class StateMachine;
     
     // TODO: Proper initialization of all fields
     MeshMPPIBase()
-    : first_(true)
+    : logger_(rclcpp::get_logger("MeshMPPIController"))
     {};
     
     /**
@@ -97,6 +99,14 @@ protected:
 
     virtual KinematicsBase& getKinematicsBase() = 0;
 
+    // Needed so the MeshMPPIBase class can reset the MeshMPPI future instance
+    virtual void resetFuture() = 0;
+
+    inline rclcpp::Logger& getLogger()
+    {
+        return logger_;
+    }
+
     [[nodiscard]] bool updateCurrentFace(const State& current);
 
     void setCurrentPoseAndVelocity(const geometry_msgs::msg::Pose& pose, const geometry_msgs::msg::Twist& vel);
@@ -127,8 +137,8 @@ protected:
     // The cost function
     std::shared_ptr<CostFunction> cost_function_;
 
-    // Wether this is the first call after a new plan was set
-    bool first_;
+    // The current state of the controller
+    StateMachine state_;
 
 private:
 
@@ -153,14 +163,23 @@ private:
     double progress_translation_threshold_;
     double progress_num_timesteps_;
 
-    bool reached_goal_;
-
     // The current plan
     std::vector<geometry_msgs::msg::PoseStamped> plan_;
 
     // A publisher for the best trajectory
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr traj_pub_;
     rclcpp::Publisher<ControlSequenceStamped>::SharedPtr sequence_pub_;
+
+    // A logger instance for this controller. Use getLogger() to access the logger instance
+    rclcpp::Logger logger_;
+};
+
+
+enum class MeshMPPIBase::StateMachine {
+    IDLE,
+    MOVING,
+    REACHED_GOAL,
+    FAILED_GOAL
 };
 
 } // namespace mesh_mppi

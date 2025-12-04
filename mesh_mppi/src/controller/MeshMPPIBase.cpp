@@ -9,6 +9,7 @@
 #include <mesh_map/util.h>
 
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/logging.hpp>
 
 
 namespace mesh_mppi
@@ -157,7 +158,7 @@ bool MeshMPPIBase::initializeParameters()
     const double time = node_->declare_parameter<double>(desc.name, 5.0, desc);
     if (0.0 >= time)
     {
-        RCLCPP_ERROR(node_->get_logger(), "Invalid parameter value: '%s' cannot be less or equal to 0.0!", desc.name.c_str());
+        RCLCPP_ERROR(getLogger(), "Invalid parameter value: '%s' cannot be less or equal to 0.0!", desc.name.c_str());
         return false;
     }
     progress_num_timesteps_ = time * params_.controller_frequency;
@@ -193,7 +194,7 @@ rcl_interfaces::msg::SetParametersResult MeshMPPIBase::reconfigure(const std::ve
             if (0.0 >= param.as_double())
             {
                 RCLCPP_ERROR(
-                    node_->get_logger(),
+                    getLogger(),
                     "Invalid parameter value: '%s.progress_check.timeframe' cannot be less or equal to 0.0!",
                     name_.c_str()
                 );
@@ -236,21 +237,26 @@ bool MeshMPPIBase::isGoalReached(double dist_tolerance, double angle_tolerance)
         plan_.back().pose.orientation.y,
         plan_.back().pose.orientation.z
     );
-    reached_goal_ = (goal - pose_.position).norm() < dist_tolerance && orientation.angularDistance(pose_.orientation) < angle_tolerance;
-    return reached_goal_;
+    const bool reached_goal = (goal - pose_.position).norm() < dist_tolerance && orientation.angularDistance(pose_.orientation) < angle_tolerance;
+    if (reached_goal)
+    {
+        state_ = StateMachine::REACHED_GOAL;
+    }
+    return reached_goal;
 }
 
 
 bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& plan)
 {
-    if (reached_goal_)
+    if (StateMachine::REACHED_GOAL == state_ || StateMachine::FAILED_GOAL == state_)
     {
+        RCLCPP_DEBUG(getLogger(), "setPlan(): Either reached or failed goal. Resetting optimizer and compute future!");
         getOptimizerBase().reset();
-        first_ = true;
+        resetFuture();
     }
 
     plan_ = plan;
-    reached_goal_ = false;
+    state_ = StateMachine::MOVING;
     pose_.valid = false;
     past_trajectory_.clear();
     cost_function_->set_plan(plan);
@@ -310,9 +316,11 @@ bool MeshMPPIBase::initialize(
 {
     // Init the controller
     name_ = name;
+    logger_ = node->get_logger().get_child(name);
     tf_ = tf_ptr;
     map_ = mesh_map_ptr;
     node_ = node;
+    state_ = StateMachine::IDLE;
     rclcpp::QoS qos = rclcpp::SensorDataQoS();
     qos.reliable();
     qos.keep_last(1);
@@ -321,14 +329,14 @@ bool MeshMPPIBase::initialize(
 
     if (!this->initializeParameters())
     {
-        RCLCPP_ERROR(node_->get_logger(), "MeshMPPI: Could not initialize parameters!");
+        RCLCPP_ERROR(getLogger(), "MeshMPPI: Could not initialize parameters!");
         return false;
     }
         
     cost_function_ = std::make_shared<CostFunction>(node_, name, map_);
     if (!cost_function_)
     {
-        RCLCPP_ERROR(node->get_logger(), "MeshMPPI: make_unique<CostFunction> returned nullptr");
+        RCLCPP_ERROR(getLogger(), "MeshMPPI: make_unique<CostFunction> returned nullptr");
         return false;
     }
 
