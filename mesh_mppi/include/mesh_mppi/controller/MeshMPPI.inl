@@ -97,6 +97,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
     Trajectory trajectory;
     typename KinematicsT::ControlVector control;
     Eigen::ArrayXf sequence;
+    double cost;
     if (result.valid())
     {
         const auto res = result.get();
@@ -131,6 +132,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
         trajectory = res->trajectory;
         control = res->control;
         sequence = res->sequence;
+        cost = res->cost;
     }
     else
     {
@@ -140,7 +142,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
         return ExePathResult::NO_VALID_CMD;
     }
 
-    if (!isMakingProgress(trajectory))
+    if (!isMakingProgress(trajectory, cost))
     {
         state_ = StateMachine::FAILED_GOAL;
         message = "The robot failed to make progress towards the goal!";

@@ -321,7 +321,12 @@ std::expected<typename MPPIOptimizer<KinematicT>::Result, Error> MPPIOptimizer<K
     // Shift by 1 control for the next iteration
     this->shiftControlSequence();
 
-    return Result{best_control, sequence_, final_traj};
+    return Result{
+        .control{best_control},
+        .sequence{sequence_},
+        .trajectory{final_traj},
+        .cost{result.value()}
+    };
 }
 
 

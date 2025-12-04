@@ -165,6 +165,7 @@ struct MPPIOptimizer<KinematicT>::Result
     ControlVector control;
     Eigen::ArrayXf sequence;
     Trajectory trajectory;
+    double cost;
 };
 
 

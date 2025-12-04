@@ -113,7 +113,7 @@ protected:
 
     lvr2::OptionalFaceHandle getCurrentFace() const;
 
-    [[nodiscard]] bool isMakingProgress(const Trajectory& traj);
+    [[nodiscard]] bool isMakingProgress(const Trajectory& traj, double cost);
 
 
     void publishOptimalTrajectory(const Trajectory& traj);
@@ -160,7 +160,9 @@ private:
 
     // Data for progress checking
     std::deque<mesh_map::Vector> past_trajectory_;
+    std::deque<double> past_costs_;
     double progress_translation_threshold_;
+    double progress_cost_reduction_threshold_;
     double progress_num_timesteps_;
 
     // The current plan

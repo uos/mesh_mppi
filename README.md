@@ -92,7 +92,12 @@ mesh_controller:
   progress_check:
     # Minimum distance (meter) the robot has to travel in the progress check timeframe
     translation_threshold: 0.25
-    # The timeframe (seconds) in which the robot has to travel the distance given by 'translation_threshold'
+    # The percentage cost reduction the robot has to achieve to be considered progressing
+    # The cost used here is NOT the MeshMap's cost! This uses the cost predicted by the cost function
+    # for the optimized control signal sequence.
+    cost_reduction_threshold: 0.25
+    # The timeframe (seconds) used for the progress check.
+    # The robot is considered stuck if none of the criteria are fulfilled in the specified timeframe
     timeframe: 5.0
 
   # Parameters for the kinematic model
@@ -159,7 +164,12 @@ bicycle_controller:
   progress_check:
     # Minimum distance (meter) the robot has to travel in the progress check timeframe
     translation_threshold: 0.25
-    # The timeframe (seconds) in which the robot has to travel the distance given by 'translation_threshold'
+    # The percentage cost reduction the robot has to achieve to be considered progressing
+    # The cost used here is NOT the MeshMap's cost! This uses the cost predicted by the cost function
+    # for the optimized control signal sequence.
+    cost_reduction_threshold: 0.25
+    # The timeframe (seconds) used for the progress check.
+    # The robot is considered stuck if none of the criteria are fulfilled in the specified timeframe
     timeframe: 5.0
 
   # Parameters for the kinematic model

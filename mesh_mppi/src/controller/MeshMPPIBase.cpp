@@ -1,6 +1,7 @@
 #include <cmath>
 #include <format>
 
+#include <limits>
 #include <mesh_mppi/controller/MeshMPPIBase.hpp>
 #include <mesh_mppi/Util.hpp>
 
@@ -151,6 +152,12 @@ bool MeshMPPIBase::initializeParameters()
     desc.description = "The minimum distance the robot has to travel in the specified time frame to not be considered stuck.";
     progress_translation_threshold_ = node_->declare_parameter<double>(desc.name, 0.25, desc);
     }
+    { // Cost reduction threshold for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.cost_reduction_threshold";
+    desc.description = "The percentage cost reduction the robot has to achieve in the specified time frame to not be considered stuck.";
+    progress_cost_reduction_threshold_ = node_->declare_parameter<double>(desc.name, 0.25, desc);
+    }
     { // Translation timeframe for progress check
     rcl_interfaces::msg::ParameterDescriptor desc;
     desc.name = name_ + ".progress_check.timeframe";
@@ -188,6 +195,10 @@ rcl_interfaces::msg::SetParametersResult MeshMPPIBase::reconfigure(const std::ve
         else if (name_ + ".progress_check.translation_threshold" == param.get_name())
         {
             progress_translation_threshold_ = param.as_double();
+        }
+        else if (name_ + ".progress_check.cost_reduction_threshold" == param.get_name())
+        {
+            progress_cost_reduction_threshold_ = param.as_double();
         }
         else if (name_ + ".progress_check.timeframe" == param.get_name())
         {
@@ -344,12 +355,14 @@ bool MeshMPPIBase::initialize(
 }
 
 
-bool MeshMPPIBase::isMakingProgress(const Trajectory& traj)
+bool MeshMPPIBase::isMakingProgress(const Trajectory& traj, double cost)
 {
     past_trajectory_.push_back(traj.front().pose.position);
+    past_costs_.push_back(cost);
     while (past_trajectory_.size() > progress_num_timesteps_)
     {
         past_trajectory_.pop_front();
+        past_costs_.pop_front();
     }
 
     // We give the robot time to start moving
@@ -364,10 +377,12 @@ bool MeshMPPIBase::isMakingProgress(const Trajectory& traj)
         traveled_distance += past_trajectory_[i].distance(past_trajectory_[ii]);
     }
 
-    // TODO: Should we also have a rotational term to allow for in place rotation?
-    // TODO: Check if we are close to the goal
+    // Check for cost improvement
+    const double cost_delta = past_costs_.front() - past_costs_.back();
+    const double tmp = past_costs_.front() < std::numeric_limits<double>::epsilon() ? 1.0 : past_costs_.front();
+    const double percentage_reduction = cost_delta / tmp;
 
-    return traveled_distance > progress_translation_threshold_;
+    return !(traveled_distance < progress_translation_threshold_ && percentage_reduction < progress_cost_reduction_threshold_);
 }
 
 } // namespace mesh_mppi
