@@ -163,7 +163,7 @@ private:
     std::deque<double> past_costs_;
     double progress_translation_threshold_;
     double progress_cost_reduction_threshold_;
-    double progress_num_timesteps_;
+    size_t progress_num_timesteps_;
 
     // The current plan
     std::vector<geometry_msgs::msg::PoseStamped> plan_;

@@ -278,7 +278,7 @@ std::expected<float, Error> XTECostFunction::score(
     }
     // NOTE: There is one edge case where this cost can be < 0:
     // The final optimized control sequence is not included in the range computed
-    // during preparation. Therefore when we substract the min it can happen that
+    // during preparation. Therefore when we subtract the min it can happen that
     // this cost term is slightly negative. We choose to ignore this since the observed
     // absolute values were smaller than 0.001 which is okay for purposes of progress
     // checks and visualization.

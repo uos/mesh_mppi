@@ -161,14 +161,14 @@ bool MeshMPPIBase::initializeParameters()
     { // Translation timeframe for progress check
     rcl_interfaces::msg::ParameterDescriptor desc;
     desc.name = name_ + ".progress_check.timeframe";
-    desc.description = "The timeframe in seconds to use for the controllers's progress check.";
+    desc.description = "The timeframe in seconds to use for the controller's progress check.";
     const double time = node_->declare_parameter<double>(desc.name, 5.0, desc);
     if (0.0 >= time)
     {
         RCLCPP_ERROR(getLogger(), "Invalid parameter value: '%s' cannot be less or equal to 0.0!", desc.name.c_str());
         return false;
     }
-    progress_num_timesteps_ = time * params_.controller_frequency;
+    progress_num_timesteps_ = static_cast<size_t>(time * params_.controller_frequency);
     }
 
     reconfigure_callback_handle_ = node_->add_on_set_parameters_callback(
@@ -212,7 +212,7 @@ rcl_interfaces::msg::SetParametersResult MeshMPPIBase::reconfigure(const std::ve
                 result.reason = "Invalid parameter value: 'progress_check.timeframe' cannot be less or equal to 0.0!";
                 result.successful = false;
             }
-            progress_num_timesteps_ = params_.controller_frequency * param.as_double();
+            progress_num_timesteps_ = static_cast<size_t>(params_.controller_frequency * param.as_double());
         }
     }
 
@@ -270,6 +270,7 @@ bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& p
     state_ = StateMachine::MOVING;
     pose_.valid = false;
     past_trajectory_.clear();
+    past_costs_.clear();
     cost_function_->set_plan(plan);
     return true;
 }
@@ -379,7 +380,9 @@ bool MeshMPPIBase::isMakingProgress(const Trajectory& traj, double cost)
 
     // Check for cost improvement
     const double cost_delta = past_costs_.front() - past_costs_.back();
-    const double tmp = past_costs_.front() < std::numeric_limits<double>::epsilon() ? 1.0 : past_costs_.front();
+    // Use a more reasonable threshold to avoid division by very small numbers
+    const double SMALL_COST_THRESHOLD = 1e-6;
+    const double tmp = past_costs_.front() < SMALL_COST_THRESHOLD ? 1.0 : past_costs_.front();
     const double percentage_reduction = cost_delta / tmp;
 
     return !(traveled_distance < progress_translation_threshold_ && percentage_reduction < progress_cost_reduction_threshold_);
