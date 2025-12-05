@@ -1,6 +1,7 @@
 #include <cmath>
 #include <format>
 
+#include <limits>
 #include <mesh_mppi/controller/MeshMPPIBase.hpp>
 #include <mesh_mppi/Util.hpp>
 
@@ -9,6 +10,7 @@
 #include <mesh_map/util.h>
 
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/logging.hpp>
 
 
 namespace mesh_mppi
@@ -143,6 +145,35 @@ bool MeshMPPIBase::initializeParameters()
         node_->declare_parameter<double>("controller_frequency", 20.0);
     }
     params_.controller_frequency = node_->get_parameter("controller_frequency").as_double();
+
+    { // Translation threshold for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.translation_threshold";
+    desc.description = "The minimum distance the robot has to travel in the specified time frame to not be considered stuck.";
+    progress_translation_threshold_ = node_->declare_parameter<double>(desc.name, 0.25, desc);
+    }
+    { // Cost reduction threshold for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.cost_reduction_threshold";
+    desc.description = "The percentage cost reduction the robot has to achieve in the specified time frame to not be considered stuck.";
+    progress_cost_reduction_threshold_ = node_->declare_parameter<double>(desc.name, 0.25, desc);
+    }
+    { // Translation timeframe for progress check
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.name = name_ + ".progress_check.timeframe";
+    desc.description = "The timeframe in seconds to use for the controller's progress check.";
+    const double time = node_->declare_parameter<double>(desc.name, 5.0, desc);
+    if (0.0 >= time)
+    {
+        RCLCPP_ERROR(getLogger(), "Invalid parameter value: '%s' cannot be less or equal to 0.0!", desc.name.c_str());
+        return false;
+    }
+    progress_num_timesteps_ = static_cast<size_t>(time * params_.controller_frequency);
+    }
+
+    reconfigure_callback_handle_ = node_->add_on_set_parameters_callback(
+        std::bind(&MeshMPPIBase::reconfigure, this, std::placeholders::_1)
+    );
     
     return true;
 }
@@ -160,6 +191,28 @@ rcl_interfaces::msg::SetParametersResult MeshMPPIBase::reconfigure(const std::ve
         {
             params_.controller_frequency = param.as_double();
             getKinematicsBase().setDeltaTime(1.0 / param.as_double());
+        }
+        else if (name_ + ".progress_check.translation_threshold" == param.get_name())
+        {
+            progress_translation_threshold_ = param.as_double();
+        }
+        else if (name_ + ".progress_check.cost_reduction_threshold" == param.get_name())
+        {
+            progress_cost_reduction_threshold_ = param.as_double();
+        }
+        else if (name_ + ".progress_check.timeframe" == param.get_name())
+        {
+            if (0.0 >= param.as_double())
+            {
+                RCLCPP_ERROR(
+                    getLogger(),
+                    "Invalid parameter value: '%s.progress_check.timeframe' cannot be less or equal to 0.0!",
+                    name_.c_str()
+                );
+                result.reason = "Invalid parameter value: 'progress_check.timeframe' cannot be less or equal to 0.0!";
+                result.successful = false;
+            }
+            progress_num_timesteps_ = static_cast<size_t>(params_.controller_frequency * param.as_double());
         }
     }
 
@@ -195,22 +248,29 @@ bool MeshMPPIBase::isGoalReached(double dist_tolerance, double angle_tolerance)
         plan_.back().pose.orientation.y,
         plan_.back().pose.orientation.z
     );
-    reached_goal_ = (goal - pose_.position).norm() < dist_tolerance && orientation.angularDistance(pose_.orientation) < angle_tolerance;
-    return reached_goal_;
+    const bool reached_goal = (goal - pose_.position).norm() < dist_tolerance && orientation.angularDistance(pose_.orientation) < angle_tolerance;
+    if (reached_goal)
+    {
+        state_ = StateMachine::REACHED_GOAL;
+    }
+    return reached_goal;
 }
 
 
 bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& plan)
 {
-    if (reached_goal_)
+    if (StateMachine::REACHED_GOAL == state_ || StateMachine::FAILED_GOAL == state_)
     {
+        RCLCPP_DEBUG(getLogger(), "setPlan(): Either reached or failed goal. Resetting optimizer and compute future!");
         getOptimizerBase().reset();
-        first_ = true;
+        resetFuture();
     }
 
     plan_ = plan;
-    reached_goal_ = false;
+    state_ = StateMachine::MOVING;
     pose_.valid = false;
+    past_trajectory_.clear();
+    past_costs_.clear();
     cost_function_->set_plan(plan);
     return true;
 }
@@ -268,9 +328,11 @@ bool MeshMPPIBase::initialize(
 {
     // Init the controller
     name_ = name;
+    logger_ = node->get_logger().get_child(name);
     tf_ = tf_ptr;
     map_ = mesh_map_ptr;
     node_ = node;
+    state_ = StateMachine::IDLE;
     rclcpp::QoS qos = rclcpp::SensorDataQoS();
     qos.reliable();
     qos.keep_last(1);
@@ -279,18 +341,51 @@ bool MeshMPPIBase::initialize(
 
     if (!this->initializeParameters())
     {
-        RCLCPP_ERROR(node_->get_logger(), "MeshMPPI: Could not initialize parameters!");
+        RCLCPP_ERROR(getLogger(), "MeshMPPI: Could not initialize parameters!");
         return false;
     }
         
     cost_function_ = std::make_shared<CostFunction>(node_, name, map_);
     if (!cost_function_)
     {
-        RCLCPP_ERROR(node->get_logger(), "MeshMPPI: make_unique<CostFunction> returned nullptr");
+        RCLCPP_ERROR(getLogger(), "MeshMPPI: make_unique<CostFunction> returned nullptr");
         return false;
     }
 
     return this->initialize();
+}
+
+
+bool MeshMPPIBase::isMakingProgress(const Trajectory& traj, double cost)
+{
+    past_trajectory_.push_back(traj.front().pose.position);
+    past_costs_.push_back(cost);
+    while (past_trajectory_.size() > progress_num_timesteps_)
+    {
+        past_trajectory_.pop_front();
+        past_costs_.pop_front();
+    }
+
+    // We give the robot time to start moving
+    if (past_trajectory_.size() < progress_num_timesteps_)
+    {
+        return true;
+    }
+
+    float traveled_distance = 0.0f;
+    for (size_t i = 0, ii = 1; ii < past_trajectory_.size(); i++, ii++)
+    {
+        traveled_distance += past_trajectory_[i].distance(past_trajectory_[ii]);
+    }
+
+    // Check for cost improvement
+    const double cost_delta = past_costs_.front() - past_costs_.back();
+    // Use a more reasonable threshold to avoid division by very small numbers
+    const double SMALL_COST_THRESHOLD = 1e-6;
+    const double tmp = past_costs_.front() < SMALL_COST_THRESHOLD ? 1.0 : past_costs_.front();
+    const double percentage_reduction = cost_delta / tmp;
+
+    return !(traveled_distance < progress_translation_threshold_ && percentage_reduction < progress_cost_reduction_threshold_);
 }
 
 } // namespace mesh_mppi

@@ -1,6 +1,7 @@
 #include <mbf_mesh_core/mesh_controller.h>
 #include <nav_msgs/msg/path.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/logger.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <mesh_mppi/scoring/CostFunction.hpp>
 #include <mesh_mppi/kinematics/DifferentialDrive.hpp>
@@ -18,10 +19,12 @@ class MeshMPPIBase: public mbf_mesh_core::MeshController
 {
 public:
     typedef std::shared_ptr<MeshMPPIBase> Ptr;
+
+    enum class StateMachine;
     
     // TODO: Proper initialization of all fields
     MeshMPPIBase()
-    : first_(true)
+    : logger_(rclcpp::get_logger("MeshMPPIController"))
     {};
     
     /**
@@ -96,24 +99,27 @@ protected:
 
     virtual KinematicsBase& getKinematicsBase() = 0;
 
+    // Needed so the MeshMPPIBase class can reset the MeshMPPI future instance
+    virtual void resetFuture() = 0;
+
+    inline rclcpp::Logger& getLogger()
+    {
+        return logger_;
+    }
+
     [[nodiscard]] bool updateCurrentFace(const State& current);
 
     void setCurrentPoseAndVelocity(const geometry_msgs::msg::Pose& pose, const geometry_msgs::msg::Twist& vel);
 
     lvr2::OptionalFaceHandle getCurrentFace() const;
 
+    [[nodiscard]] bool isMakingProgress(const Trajectory& traj, double cost);
+
 
     void publishOptimalTrajectory(const Trajectory& traj);
 
     void publishOptimalControlSequence(const Eigen::ArrayXf& data, uint32_t timesteps, uint32_t signals, const rclcpp::Time& timestamp);
 
-private:
-
-    [[nodiscard]] bool initializeParameters();
-
-    rcl_interfaces::msg::SetParametersResult reconfigure(const std::vector<rclcpp::Parameter>& parameters);
-
-protected:
     // Configuration of the controller plugin
     std::string name_;
     std::shared_ptr<tf2_ros::Buffer> tf_;
@@ -131,7 +137,18 @@ protected:
     // The cost function
     std::shared_ptr<CostFunction> cost_function_;
 
+    // The current state of the controller
+    StateMachine state_;
+
 private:
+
+    [[nodiscard]] bool initializeParameters();
+
+    rcl_interfaces::msg::SetParametersResult reconfigure(const std::vector<rclcpp::Parameter>& parameters);
+
+    // Reconfigure callback handle
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr reconfigure_callback_handle_;
+
     // The last known pose
     struct {
         bool valid;
@@ -141,8 +158,12 @@ private:
         lvr2::OptionalFaceHandle faceH;
     } pose_;
 
-    bool reached_goal_;
-
+    // Data for progress checking
+    std::deque<mesh_map::Vector> past_trajectory_;
+    std::deque<double> past_costs_;
+    double progress_translation_threshold_;
+    double progress_cost_reduction_threshold_;
+    size_t progress_num_timesteps_;
 
     // The current plan
     std::vector<geometry_msgs::msg::PoseStamped> plan_;
@@ -151,9 +172,16 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr traj_pub_;
     rclcpp::Publisher<ControlSequenceStamped>::SharedPtr sequence_pub_;
 
-protected:
-    // Wether this is the first call after a new plan was set
-    bool first_;
+    // A logger instance for this controller. Use getLogger() to access the logger instance
+    rclcpp::Logger logger_;
+};
+
+
+enum class MeshMPPIBase::StateMachine {
+    IDLE,
+    MOVING,
+    REACHED_GOAL,
+    FAILED_GOAL
 };
 
 } // namespace mesh_mppi

@@ -41,7 +41,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
             dist
         ))
         {
-            RCLCPP_ERROR(node_->get_logger(), "Could not project current position to map");
+            RCLCPP_ERROR(getLogger(), "Could not project current position to map");
             return ExePathResult::OUT_OF_MAP;
         }
 
@@ -79,25 +79,25 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
     // Get future from last computation
     auto result = std::move(future_);
     // Is only the case if the robot is not already moving
-    if (first_)
+    if (result.valid())
     {
-        first_ = false;
-        future_ = optimizer_.computeOptimalControl(current);
-        return ExePathResult::INTERNAL_ERROR;
+        // Wait for the previous computation to finish
+        result.wait();
     }
     else
     {
-        // Wait for the previous computation to finish
-        if (result.valid())
-        {
-            result.wait();
-        }
+        // Compute the control signal synchronously.
+        // This only happens on first use or after a goal was failed or reached.
+        RCLCPP_DEBUG(getLogger(), "Result future is invalid. Waiting for computation!");
+        result = optimizer_.computeOptimalControl(current);
+        result.wait();
     }
     
     // === Get the result of previous async prediction ===
     Trajectory trajectory;
     typename KinematicsT::ControlVector control;
     Eigen::ArrayXf sequence;
+    double cost;
     if (result.valid())
     {
         const auto res = result.get();
@@ -132,6 +132,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
         trajectory = res->trajectory;
         control = res->control;
         sequence = res->sequence;
+        cost = res->cost;
     }
     else
     {
@@ -141,11 +142,19 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
         return ExePathResult::NO_VALID_CMD;
     }
 
+    if (!isMakingProgress(trajectory, cost))
+    {
+        state_ = StateMachine::FAILED_GOAL;
+        message = "The robot failed to make progress towards the goal!";
+        return ExePathResult::ROBOT_STUCK;
+    }
+
     // === Start the next async prediction ===
     future_ = optimizer_.computeOptimalControl(current);
     
     cmd_vel.twist = kinematics_->getTwistFromControls(current, control);
     cmd_vel.header.stamp = node_->get_clock()->now();
+
 
     this->publishOptimalTrajectory(trajectory);
     this->publishOptimalControlSequence(sequence, params_.horizon, optimizer_.numControlSignals(), cmd_vel.header.stamp);
@@ -160,7 +169,7 @@ bool MeshMPPI<KinematicsT>::initialize()
 
     if (!kinematics_)
     {
-        RCLCPP_ERROR(node_->get_logger(), "MeshMPPI: make_unique<KinematicT> returned nullptr");
+        RCLCPP_ERROR(getLogger(), "MeshMPPI: make_unique<KinematicT> returned nullptr");
         return false;
     }
     else

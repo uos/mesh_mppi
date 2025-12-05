@@ -230,9 +230,9 @@ void XTECostFunction::prepare_for_scoring(const State& initial, int prediction_h
         {
             continue;
         }
-        auto segment_it = plan_polyline_.closest_segment_to(traj.back().pose.position);
+        auto segment_it = ref_.closest_segment_to(traj.back().pose.position);
         auto cp = segment_it->closest_point_to(traj.back().pose.position);
-        float dist_to_goal = dists[std::distance(plan_polyline_.cbegin(), segment_it)] 
+        float dist_to_goal = dists_[std::distance(ref_.cbegin(), segment_it)]
             + cp.distance(segment_it->b())
             + traj.back().pose.position.distance(cp);
 
@@ -267,7 +267,7 @@ std::expected<float, Error> XTECostFunction::score(
     const size_t idx = std::distance(ref_.cbegin(), line);
     const Vector cp = line->closest_point_to(traj.back().pose.position);
     // If we didn't include the distance from the trajectory to the plan the robot would not reach the goal
-    const float dist_along_path = dists_[idx] + cp.distance(line->b()) + cp.distance(traj.back().pose.position);
+    const float dist_along_path = dists_[idx] + cp.distance(line->b()) + traj.back().pose.position.distance(cp);
 
     // Normalize the costs by range. If we did not do this the cost range differs depending on the
     // velocities/traveled distance
@@ -276,6 +276,12 @@ std::expected<float, Error> XTECostFunction::score(
     {
         range = 1.0f;
     }
+    // NOTE: There is one edge case where this cost can be < 0:
+    // The final optimized control sequence is not included in the range computed
+    // during preparation. Therefore when we subtract the min it can happen that
+    // this cost term is slightly negative. We choose to ignore this since the observed
+    // absolute values were smaller than 0.001 which is okay for purposes of progress
+    // checks and visualization.
     costs(1) = (dist_along_path - closest_distance_along_path_) / range;
 
     // Make the robot orient towards the goal orientation if the translation tolerance is reached.

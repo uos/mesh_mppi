@@ -87,6 +87,18 @@ mesh_controller:
   type: 'mesh_mppi/DiffDriveMPC'
   # If the MeshMap's cost at the position of the robot is at or above this value the controller considers this as a collision.
   map_cost_limit: 1.0
+  
+  # Parameters for progress checking
+  progress_check:
+    # Minimum distance (meter) the robot has to travel in the progress check timeframe
+    translation_threshold: 0.25
+    # The percentage cost reduction the robot has to achieve to be considered progressing
+    # The cost used here is NOT the MeshMap's cost! This uses the cost predicted by the cost function
+    # for the optimized control signal sequence.
+    cost_reduction_threshold: 0.25
+    # The timeframe (seconds) used for the progress check.
+    # The robot is considered stuck if none of the criteria are fulfilled in the specified timeframe
+    timeframe: 5.0
 
   # Parameters for the kinematic model
   kinematics:
@@ -147,6 +159,18 @@ bicycle_controller:
   type: 'mesh_mppi/BicycleMPC'
   # If the MeshMap's cost at the position of the robot is at or above this value the controller considers this as a collision.
   map_cost_limit: 1.0
+  
+  # Parameters for progress checking
+  progress_check:
+    # Minimum distance (meter) the robot has to travel in the progress check timeframe
+    translation_threshold: 0.25
+    # The percentage cost reduction the robot has to achieve to be considered progressing
+    # The cost used here is NOT the MeshMap's cost! This uses the cost predicted by the cost function
+    # for the optimized control signal sequence.
+    cost_reduction_threshold: 0.25
+    # The timeframe (seconds) used for the progress check.
+    # The robot is considered stuck if none of the criteria are fulfilled in the specified timeframe
+    timeframe: 5.0
 
   # Parameters for the kinematic model
   kinematics:

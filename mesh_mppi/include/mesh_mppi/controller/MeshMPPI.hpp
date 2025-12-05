@@ -31,6 +31,11 @@ protected:
         return *kinematics_;
     }
 
+    virtual void resetFuture() override
+    {
+        future_ = typename AsyncOptimizer<KinematicsT>::Future();
+    }
+
 private:
     // The robot kinematic model
     std::shared_ptr<KinematicsT> kinematics_;
