@@ -64,7 +64,9 @@ XTECostFunction::XTECostFunction(
     }
 
     // Read the mbf dist_tolerance
-    node->declare_parameter<double>("dist_tolerance");
+    if (!node->has_parameter("dist_tolerance")) {
+        node->declare_parameter<double>("dist_tolerance");
+    }
     goal_tolerance_ = node->get_parameter("dist_tolerance").as_double();
 
     // Read the controller map_cost_limit
