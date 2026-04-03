@@ -53,3 +53,4 @@ jobs:
           vcs-repo-file-url: /tmp/deps.repos
           target-ros2-distro: jazzy
           skip-tests: true
+          rosdep-skip-keys: lvr2
