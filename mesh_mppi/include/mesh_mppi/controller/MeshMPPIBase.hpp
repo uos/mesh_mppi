@@ -10,6 +10,8 @@
 
 #include <mesh_mppi_msgs/msg/control_sequence_stamped.hpp>
 
+#include <mutex>
+
 namespace mesh_mppi
 {
 
@@ -75,7 +77,7 @@ public:
     * is received. My idea is have a simple state machine in the computeVelocityCommands
     * method and switch the cost function target to a 0 velocity.
     */
-    virtual bool cancel() override {return false;};
+    virtual bool cancel() override;
 
     /**
     * @brief Initializes the controller plugin with a name, a tf pointer and a mesh map pointer
@@ -120,6 +122,9 @@ protected:
 
     void publishOptimalControlSequence(const Eigen::ArrayXf& data, uint32_t timesteps, uint32_t signals, const rclcpp::Time& timestamp);
 
+    // Set the state_ to FailedGoal using the mutex
+    void setStateFailedGoal();
+
     // Configuration of the controller plugin
     std::string name_;
     std::shared_ptr<tf2_ros::Buffer> tf_;
@@ -139,6 +144,8 @@ protected:
 
     // The current state of the controller
     StateMachine state_;
+    // Mutex for thread-safe access to the state
+    std::mutex state_mtx_;
 
 private:
 
@@ -181,7 +188,8 @@ enum class MeshMPPIBase::StateMachine {
     IDLE,
     MOVING,
     REACHED_GOAL,
-    FAILED_GOAL
+    FAILED_GOAL,
+    CANCELLED,
 };
 
 } // namespace mesh_mppi
