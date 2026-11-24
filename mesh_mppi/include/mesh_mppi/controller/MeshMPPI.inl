@@ -41,7 +41,9 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
             dist
         ))
         {
+            this->setStateFailedGoal();
             RCLCPP_ERROR(getLogger(), "Could not project current position to map");
+            message = "Could not project current position to map!";
             return ExePathResult::OUT_OF_MAP;
         }
 
@@ -58,6 +60,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
             map_->faceNormals()[current.face.unwrap()]
         ))
         {
+            this->setStateFailedGoal();
             message = "Projected robot position is not on the mesh surface!";
             return ExePathResult::OUT_OF_MAP;
         }
@@ -66,12 +69,14 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
         const float init_cost = map_->costAtPosition(map_->mesh()->getVerticesOfFace(current.face.unwrap()), bary);
         if (params_.map_cost_limit <= init_cost)
         {
+            this->setStateFailedGoal();
             message = "Current robot position has inscribed radius cost!";
             return ExePathResult::COLLISION;
         }
     }
     else
     {
+        this->setStateFailedGoal();
         message = "Out of map";
         return ExePathResult::OUT_OF_MAP;
     }
@@ -111,16 +116,19 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
             const auto& error = res.error();
             if (Error::NO_VALID_COMMAND == error)
             {
+                this->setStateFailedGoal();
                 message = "No valid command found during optimization!";
                 return ExePathResult::NO_VALID_CMD;
             }
             else if (Error::OUT_OF_MAP == error)
             {
+                this->setStateFailedGoal();
                 message = "The robot is outside the map!";
                 return ExePathResult::OUT_OF_MAP;
             }
             else
             {
+                this->setStateFailedGoal();
                 message = std::format(
                     "An unhandled error occured during optimization! {}",
                     int(error)
@@ -136,6 +144,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
     }
     else
     {
+        this->setStateFailedGoal();
         // Reset the optimizer if the computation did not finish in time
         optimizer_.reset();
         message = "Computation did not finish in time";
@@ -144,7 +153,7 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
 
     if (!isMakingProgress(trajectory, cost))
     {
-        state_ = StateMachine::FAILED_GOAL;
+        this->setStateFailedGoal();
         message = "The robot failed to make progress towards the goal!";
         return ExePathResult::ROBOT_STUCK;
     }
@@ -158,6 +167,14 @@ uint32_t MeshMPPI<KinematicsT>::computeVelocityCommands(
 
     this->publishOptimalTrajectory(trajectory);
     this->publishOptimalControlSequence(sequence, params_.horizon, optimizer_.numControlSignals(), cmd_vel.header.stamp);
+
+    // On success we are moving, except if we were cancelled in between
+    {
+        std::lock_guard lock(state_mtx_);
+        if (state_ != StateMachine::CANCELLED) {
+            state_ = StateMachine::MOVING;
+        }
+    }
 
     return 0;
 }

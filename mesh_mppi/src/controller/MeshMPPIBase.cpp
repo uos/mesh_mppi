@@ -1,7 +1,6 @@
 #include <cmath>
 #include <format>
 
-#include <limits>
 #include <mesh_mppi/controller/MeshMPPIBase.hpp>
 #include <mesh_mppi/Util.hpp>
 
@@ -251,6 +250,7 @@ bool MeshMPPIBase::isGoalReached(double dist_tolerance, double angle_tolerance)
     const bool reached_goal = (goal - pose_.position).norm() < dist_tolerance && orientation.angularDistance(pose_.orientation) < angle_tolerance;
     if (reached_goal)
     {
+        std::lock_guard lock(state_mtx_);
         state_ = StateMachine::REACHED_GOAL;
     }
     return reached_goal;
@@ -259,15 +259,26 @@ bool MeshMPPIBase::isGoalReached(double dist_tolerance, double angle_tolerance)
 
 bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& plan)
 {
-    if (StateMachine::REACHED_GOAL == state_ || StateMachine::FAILED_GOAL == state_)
+    // Transition to the moving state
     {
-        RCLCPP_DEBUG(getLogger(), "setPlan(): Either reached or failed goal. Resetting optimizer and compute future!");
-        getOptimizerBase().reset();
-        resetFuture();
+        std::lock_guard lock(state_mtx_);
+        switch (this->state_) {
+            case StateMachine::REACHED_GOAL:
+            case StateMachine::FAILED_GOAL:
+            case StateMachine::CANCELLED:
+                {
+                    RCLCPP_DEBUG(getLogger(), "setPlan(): Either reached, failed, or cancelled goal. Resetting optimizer and compute future!");
+                    getOptimizerBase().reset();
+                    resetFuture();
+                    break;
+                }
+            default: break;
+        }
+
+        state_ = StateMachine::MOVING;
     }
 
     plan_ = plan;
-    state_ = StateMachine::MOVING;
     pose_.valid = false;
     past_trajectory_.clear();
     past_costs_.clear();
@@ -275,6 +286,16 @@ bool MeshMPPIBase::setPlan(const std::vector<geometry_msgs::msg::PoseStamped>& p
     return true;
 }
 
+bool MeshMPPIBase::cancel() {
+    std::lock_guard lock(state_mtx_);
+    state_ = StateMachine::CANCELLED;
+    return false;
+}
+
+void MeshMPPIBase::setStateFailedGoal() {
+    std::lock_guard lock(state_mtx_);
+    state_ = StateMachine::FAILED_GOAL;
+}
 
 void MeshMPPIBase::publishOptimalTrajectory(const Trajectory& trajectory)
 {
